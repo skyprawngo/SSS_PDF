@@ -1,5 +1,10 @@
+temp/
+build/
 .DS_Store
-tmp/
-*.png
-last_url.json
 .env
+.gradle
+.vscode
+*.png
+env.json
+# Ignore Gradle build output directory
+build
