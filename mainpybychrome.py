@@ -13,37 +13,37 @@ from subprocess import Popen
 URL_SAVE_FILE = "./last_url.json"
 
 def save_last_url(url):
-    """현재 URL을 JSON 파일에 저장"""
-    with open(URL_SAVE_FILE, "w") as file:
-        json.dump({"last_url": url}, file)
-    print(f"URL 저장 완료: {url}")
+  """현재 URL을 JSON 파일에 저장"""
+  with open(URL_SAVE_FILE, "w") as file:
+    json.dump({"last_url": url}, file)
+  print(f"URL 저장 완료: {url}")
 
 def load_last_url(default_url):
-    """저장된 URL을 불러옴. 없으면 기본값 반환"""
-    if os.path.exists(URL_SAVE_FILE):
-        with open(URL_SAVE_FILE, "r") as file:
-            data = json.load(file)
-            return data.get("last_url", default_url)
-    return default_url
+  """저장된 URL을 불러옴. 없으면 기본값 반환"""
+  if os.path.exists(URL_SAVE_FILE):
+    with open(URL_SAVE_FILE, "r") as file:
+      data = json.load(file)
+      return data.get("last_url", default_url)
+  return default_url
 
 def is_chrome_open(port):
-    """포트가 열려 있는지 확인 (Chrome이 실행 중인지 체크)"""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        result = sock.connect_ex(('127.0.0.1', port))
-        return result == 0
+  """포트가 열려 있는지 확인 (Chrome이 실행 중인지 체크)"""
+  with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    result = sock.connect_ex(('127.0.0.1', port))
+    return result == 0
 
 def start_chrome_with_debugger(port, user_data_dir, chrome_path):
-    """Chrome 디버깅 모드로 실행. 디버깅 포트가 열려 있지 않으면 Chrome을 시작."""
-    if not is_chrome_open(port):
-        print(f"Chrome 디버깅 포트 {port}이 열려있지 않습니다. Chrome을 새로 시작합니다.")
-        Popen([
-            chrome_path,
-            f"--remote-debugging-port={port}",
-            f"--user-data-dir={user_data_dir}"
-        ])
-        time.sleep(5)  # Chrome이 완전히 열리도록 대기
-    else:
-        print(f"Chrome 디버깅 포트 {port}이 이미 열려 있습니다.")
+  """Chrome 디버깅 모드로 실행. 디버깅 포트가 열려 있지 않으면 Chrome을 시작."""
+  if not is_chrome_open(port):
+    print(f"Chrome 디버깅 포트 {port}이 열려있지 않습니다. Chrome을 새로 시작합니다.")
+    Popen([
+      chrome_path,
+      f"--remote-debugging-port={port}",
+      f"--user-data-dir={user_data_dir}"
+    ])
+    time.sleep(5)  # Chrome이 완전히 열리도록 대기
+  else:
+    print(f"Chrome 디버깅 포트 {port}이 이미 열려 있습니다.")
 
 # ChromeDriver와 연결된 포트 정보 설정
 CHROME_DEBUGGER_PORT = 9222
@@ -68,15 +68,15 @@ print(f"복원된 URL: {current_url}")
 
 # 새로고침 방지
 if driver.current_url != current_url:
-    driver.get(current_url)
+  driver.get(current_url)
 
 # 스크롤 위치 저장 및 복원
 scroll_position = 0
 try:
-    scroll_position = driver.execute_script("return window.scrollY;")
-    print(f"저장된 스크롤 위치: {scroll_position}")
+  scroll_position = driver.execute_script("return window.scrollY;")
+  print(f"저장된 스크롤 위치: {scroll_position}")
 except Exception as e:
-    print(f"스크롤 위치 저장 실패: {e}")
+  print(f"스크롤 위치 저장 실패: {e}")
 
 # 작업 수행
 time.sleep(5)
