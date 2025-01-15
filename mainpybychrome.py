@@ -10,7 +10,6 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 import time
 import socket
-import atexit
 from urllib.parse import urlparse, parse_qs
 from subprocess import Popen
 import signal
@@ -18,15 +17,28 @@ import signal
 # 스크린샷 저장 폴더 설정
 SCREENSHOT_FOLDER = "SS_temp"
 
-
 # 전역 변수
 # ChromeDriver와 연결된 포트 정보 설정
 CHROME_DEBUGGER_PORT = 9222
 USER_DATA_DIR = "/tmp/chrome_debug"  # 세션 유지 디렉토리
 CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-set_url = "https://play.google.com/books/reader?id=FB-rEAAAQBAJ&pg=GBS.PP1"
 
+"""
+  set_url = "당신이 다운로드하고싶은 책의 url"
+  set_entire_page = "당신이 다운로드하고싶은 책의 쪽수"
+                      *전체 페이지를 넣으면 한번 실행하면 전부 나옴
+                      50 을 넣으면 한번 실행할 때 마다 50페이지씩 찍어냄
+  didyou_set_your_session = False 
+                      *실행한 후 로그인 정보 넣고 나서 True로 바꾸세요
+  didyou_done = False
+                      *다 끝났다면 숨겨져서 실행중인 Chromedriver 닫기
+"""
+
+set_url = "google play books url"
+set_entire_page = 50
+didyou_set_your_session = True
+didyou_done = False
 
 def close_chrome_and_port(port=9222):
   """
@@ -100,7 +112,7 @@ def get_reader_page_id():
 
   except Exception as e:
     print(f"reader-page ID 추출 중 오류 발생: {e}")
-    return None
+    return "page-0-0"
 
   finally:
     # iframe 해제
@@ -177,13 +189,11 @@ def capture_element_screenshot(int_page, output_filename="element_screenshot.png
   output_path = os.path.join(SCREENSHOT_FOLDER, output_filename)
 
   try:
-    print("확인용1")
     # iframe이 새로 로드됐을 가능성이 있으므로, 다시 찾아서 전환
     iframe = WebDriverWait(driver, 10).until(
       EC.presence_of_element_located((By.TAG_NAME, "iframe"))
     )
     driver.switch_to.frame(iframe)
-    print("확인용2")
     
     # 동적으로 page-0-0, page-1-0, page-2-0 ... 형태의 selector를 생성
     page_selector = f'reader-page[id="page-{int_page}-0"]'
@@ -193,7 +203,6 @@ def capture_element_screenshot(int_page, output_filename="element_screenshot.png
     element = WebDriverWait(driver, 10).until(
       EC.visibility_of_element_located((By.CSS_SELECTOR, page_selector))
     )
-    print("확인용3")
 
     # 요소의 위치와 크기 가져오기
     bounding_box = driver.execute_script(
@@ -247,26 +256,28 @@ def main():
   try: 
     headless_mode = True
     debugging = True  # 디버깅 모드 활성화
-    repeats_left = 30  # for문 최대 반복 횟수
+    if set_entire_page != int:
+      repeats_left = 50  # for문 기본 반복 횟수
+    elif set_entire_page == int:
+      repeats_left = set_entire_page
     past_url = None
-    current_page_id = "page-0-0"
     initialize_driver(headless=headless_mode, debugging=debugging)
     current_url = driver.current_url
     set_url_id = parse_qs(urlparse(set_url).query).get("id", [None])[0]
     current_url_id = parse_qs(urlparse(current_url).query).get("id", [None])[0]
     
     # 초기 URL 설정, page id 설정
-    if current_url_id == set_url_id:
+    if current_url_id == set_url_id :
       print("현재 페이지의 ID와 set_url의 ID가 동일합니다.")
       print(f"현재 페이지 : {current_url}")
       driver.get(current_url)
-      # reader-page의 id값 가져오기
-      current_page_id = get_reader_page_id()
     else:
       print("현재 페이지의 ID와 set_url의 ID가 동일하지 않습니다.")
       print(f"설정한 페이지로 이동 : {set_url}")
       driver.get(set_url)
 
+    # reader-page의 id값 가져오기
+    current_page_id = get_reader_page_id()
     
     # current_page_id에서 중앙의 숫자 값 추출
     int_page = int(current_page_id.split('-')[1])
@@ -302,9 +313,23 @@ def main():
 
   except Exception as e:
     print(f"예외 발생: {e}")
-    # close_chrome_and_port()
+    close_chrome_and_port()
 
+def initial_main():
+  if is_chrome_open(CHROME_DEBUGGER_PORT):
+    close_chrome_and_port()
+  headless_mode = False
+  debugging = True  # 디버깅 모드 활성화
+  initialize_driver(headless=headless_mode, debugging=debugging)
+  driver.get(set_url)
+
+  
 # 프로그램 실행
 if __name__ == "__main__":
   ensure_screenshot_folder_exists()  # 폴더 존재 확인
-  main()
+  if didyou_done:
+    close_chrome_and_port()
+  elif not didyou_set_your_session:
+    initial_main()
+  elif didyou_set_your_session:
+    main()

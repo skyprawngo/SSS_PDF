@@ -1,10 +1,4 @@
-temp/
-build/
 .DS_Store
-.env
-.gradle
 .vscode
 *.png
-env.json
-# Ignore Gradle build output directory
 build
