@@ -35,9 +35,9 @@ user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
                       *다 끝났다면 숨겨져서 실행중인 Chromedriver 닫기
 """
 
-set_url = "google play books url"
-set_entire_page = 50
-didyou_set_your_session = True
+set_url = "your_google_play_books_url"
+set_entire_page = 5
+didyou_set_your_session = False
 didyou_done = False
 
 def close_chrome_and_port(port=9222):
@@ -250,16 +250,16 @@ def capture_element_screenshot(int_page, output_filename="element_screenshot.png
   finally:
     # iframe 해제
     driver.switch_to.default_content()
-
+ 
 
 def main():
   try: 
     headless_mode = True
     debugging = True  # 디버깅 모드 활성화
-    if set_entire_page != int:
-      repeats_left = 50  # for문 기본 반복 횟수
-    elif set_entire_page == int:
+    if isinstance(set_entire_page, int):
       repeats_left = set_entire_page
+    else:
+      repeats_left = 50  # 기본 반복 횟수
     past_url = None
     initialize_driver(headless=headless_mode, debugging=debugging)
     current_url = driver.current_url
