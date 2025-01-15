@@ -4,12 +4,12 @@ SSS_PDF (Sequence ScreenShot to PDF)
 * 사용 용도 : Google Books에서 구매한 책 PDF 따기
 * 사용 목적 : 내보내기 불가능한 책을 다운로드 하려는 목적
 
-사용환경
+사용환경(Environment Requirements)
 ---
 
 * python
 * selenium
-* google chrome 및 동일한 버전의 chromedriver
+* google chrome 및 동일한 버전의 chromedriver (same version)
 * img2pdf
 
 사용방법
@@ -26,14 +26,6 @@ SSS_PDF (Sequence ScreenShot to PDF)
 
 * Purpose: Extracting PDF files from books purchased on Google Books.
 * Objective: To download books that cannot be exported.
-
-Environment Requirements
----
-
-•	Python
-•	Selenium
-•	Google Chrome and a compatible version of ChromeDriver
-•	img2pdf
 
 Usage Instructions
 ---
