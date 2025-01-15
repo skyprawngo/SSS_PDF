@@ -1,16 +1,19 @@
-# SSS_PDF (Sequence ScreenShot to PDF)
+SSS_PDF (Sequence ScreenShot to PDF)
+===
 
-사용 용도 : Google Books에서 구매한 책 PDF 따기
-사용 목적 : 내보내기 불가능한 책을 다운로드 하려는 목적
----
-## 사용환경
+* 사용 용도 : Google Books에서 구매한 책 PDF 따기
+* 사용 목적 : 내보내기 불가능한 책을 다운로드 하려는 목적
 
-python
-selenium
-google chrome 및 동일한 버전의 chromedriver
-img2pdf
+사용환경
 ---
-## 사용방법
+
+* python
+* selenium
+* google chrome 및 동일한 버전의 chromedriver
+* img2pdf
+
+사용방법
+---
 
 0. 위의 사용환경을 전부 설치한다.
 1. didyou_set_your_session 값을 False 상태에서 한 번 실행시킨다.
