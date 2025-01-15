@@ -11,8 +11,8 @@ from selenium.webdriver.common.action_chains import ActionChains
 import time
 import socket
 import atexit
+from urllib.parse import urlparse, parse_qs
 from subprocess import Popen
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 import signal
 
 # 스크린샷 저장 폴더 설정
@@ -68,39 +68,43 @@ def ensure_screenshot_folder_exists():
     print(f"스크린샷 폴더가 이미 존재합니다: {SCREENSHOT_FOLDER}")
 
 
-def get_previous_screenshot_filename():
-  """
-  SCREENSHOT_FOLDER에 있는 파일 중 tmp_screenshot_~.png 형식의 마지막 숫자를 반환.
-  """
-  try:
-    # 폴더에서 파일 목록 가져오기
-    files = os.listdir(SCREENSHOT_FOLDER)
-
-    # "tmp_screenshot_"로 시작하고 ".png"로 끝나는 파일 필터링 및 정렬
-    screenshot_files = sorted(
-      [f for f in files if f.startswith("tmp_screenshot_") and f.endswith(".png")]
-    )
-
-    if not screenshot_files:
-      print("유효한 스크린샷 파일이 없습니다.")
-      return 0
-
-    # 가장 마지막 파일 이름
-    last_file = screenshot_files[-1]
-
-    # 파일 이름에서 숫자 부분 추출
-    number_part = last_file[len("tmp_screenshot_") : -len(".png")]
-    return int(number_part)
-
-  except Exception as e:
-    print(f"파일 검사 중 오류 발생: {e}")
-    return 0
-
-
 def is_chrome_open(port):
   with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
     result = sock.connect_ex(("127.0.0.1", port))
   return result == 0
+
+
+def get_reader_page_id():
+  """
+  iframe 내부의 reader-page 태그의 단일 id 값을 반환합니다.
+
+  Returns:
+      str: reader-page 태그의 id 값 (존재하지 않으면 None 반환)
+  """
+  try:
+    # iframe 대기 및 전환
+    iframe = WebDriverWait(driver, 10).until(
+      EC.presence_of_element_located((By.TAG_NAME, "iframe"))
+    )
+    driver.switch_to.frame(iframe)
+
+    # reader-page 요소 찾기
+    reader_page = WebDriverWait(driver, 10).until(
+      EC.presence_of_element_located((By.CSS_SELECTOR, "reader-page[id]"))
+    )
+
+    # id 값 추출
+    reader_page_id = reader_page.get_attribute("id")
+    print(f"추출된 reader-page ID 값: {reader_page_id}")
+    return reader_page_id
+
+  except Exception as e:
+    print(f"reader-page ID 추출 중 오류 발생: {e}")
+    return None
+
+  finally:
+    # iframe 해제
+    driver.switch_to.default_content()
 
 
 def start_chrome_with_debugger(port, user_data_dir, chrome_path, headless=False):
@@ -123,7 +127,7 @@ def start_chrome_with_debugger(port, user_data_dir, chrome_path, headless=False)
     # 크롬 실행
     Popen(chrome_args)
     # 대기 시간을 충분히 늘림 (5 -> 10초)
-    time.sleep(10)
+    time.sleep(3)
 
     # 대기 후에도 포트가 안 열려 있으면 경고
     if not is_chrome_open(port):
@@ -134,154 +138,6 @@ def start_chrome_with_debugger(port, user_data_dir, chrome_path, headless=False)
   else:
     print(f"Chrome 디버깅 포트 {port}이 이미 열려 있습니다.")
 
-
-def compare_and_get_reset_url(set_url, loaded_url):
-  # set_url과 loaded_url의 id와 pg 값을 비교하여 reset_url을 반환
-  if not loaded_url:  # loaded_url이 None인 경우 기본 set_url 반환
-    return set_url
-
-  # URL 파싱
-  set_url_parsed = urlparse(set_url)
-  loaded_url_parsed = urlparse(loaded_url)
-
-  # 쿼리 파라미터 추출
-  set_params = parse_qs(set_url_parsed.query)
-  loaded_params = parse_qs(loaded_url_parsed.query)
-
-  # id 값 비교
-  if set_params.get("id") == loaded_params.get("id"):
-    # pg 값 비교
-    set_pg = set_params.get("pg", [""])[0]
-    loaded_pg = loaded_params.get("pg", [""])[0]
-
-    # pg 값 순서 비교 함수
-    def pg_to_order(pg):
-      if not pg.startswith("GBS."):
-        return float("inf")  # 예외적으로 잘못된 형식은 가장 큰 값으로 처리
-      pg = pg[4:]  # "GBS." 제거
-      prefix_order = {"PP": 1, "PA": 2, "RA": 3}  # 우선순위 정의 (RA 유지)
-      prefix = pg[:2]  # "PP", "PA", "RA" 추출
-      number = int(pg[2:]) if pg[2:].isdigit() else float("inf")  # 숫자 추출
-
-      # "RA"를 "RA1-PA"로 변경
-      if prefix == "RA":
-        prefix = "RA1-PA"
-
-      return (prefix_order.get(prefix, float("inf")), number)
-
-    # pg 순서 비교
-    set_order = pg_to_order(set_pg)
-    loaded_order = pg_to_order(loaded_pg)
-
-    # 더 큰 pg 값을 reset_url로 선택
-    if loaded_order > set_order:
-      reset_params = loaded_params
-    else:
-      reset_params = set_params
-  else:
-    # id 값이 다르면 기본 set_url 사용
-    reset_params = set_params
-
-  # 새로운 URL 생성
-  reset_url = urlunparse(
-    (
-      set_url_parsed.scheme,
-      set_url_parsed.netloc,
-      set_url_parsed.path,
-      set_url_parsed.params,
-      urlencode(reset_params, doseq=True),
-      set_url_parsed.fragment,
-    )
-  )
-  return reset_url
-
-
-def ensure_page_loaded(driver, set_url, loaded_url):
-  """
-  현재 URL과 set_url을 비교하여 페이지를 새로 로드할 필요가 있는지 확인하고,
-  필요하면 reset_url로 페이지를 로드합니다.
-  """
-  reset_url = compare_and_get_reset_url(set_url, loaded_url)
-  print(f"선택된 reset_url: {reset_url}")
-
-  # 새로고침 방지
-  if driver.current_url != reset_url:
-    print(f"다른 URL이 감지되었습니다. 페이지를 로드합니다: {reset_url}")
-    driver.get(reset_url)
-    WebDriverWait(driver, 10).until(
-      EC.presence_of_element_located((By.TAG_NAME, "body"))
-    )  # 페이지 로딩 확인
-    time.sleep(4)  # 로딩 후 대기
-  else:
-    print("URL이 동일하므로 재요청하지 않습니다.")
-    time.sleep(1)
-
-
-def capture_element_screenshot(selector, output_filename="element_screenshot.png"):
-  """
-  DevTools Protocol을 사용해 iframe 내부의 특정 요소를 캡처
-  (요소가 실제로 보이도록 scrollIntoView 및 visibility_of_element_located 사용)
-  """
-  output_path = os.path.join(SCREENSHOT_FOLDER, output_filename)
-
-  try:
-    # iframe이 새로 로드됐을 가능성이 있으므로, 다시 찾아서 전환
-    iframe = WebDriverWait(driver, 10).until(
-      EC.presence_of_element_located((By.TAG_NAME, "iframe"))
-    )
-    driver.switch_to.frame(iframe)
-
-    # 요소가 보이도록 기다리기 (visibility_of_element_located)
-    element = WebDriverWait(driver, 10).until(
-      EC.visibility_of_element_located((By.CSS_SELECTOR, selector))
-    )
-
-    # 요소의 위치와 크기 가져오기
-    bounding_box = driver.execute_script(
-      """
-      const rect = document.querySelector(arguments[0]).getBoundingClientRect();
-      return {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height
-      };
-      """,
-      selector,
-    )
-
-    print("Bounding Box:", json.dumps(bounding_box, indent=4))
-
-    # 혹시라도 bounding_box가 여전히 0이면 추가 대기 or 재시도 로직을 둘 수도 있음
-    if bounding_box["width"] == 0 or bounding_box["height"] == 0:
-      print("⚠️ Bounding Box가 0입니다. 재시도 또는 대기 시간이 더 필요할 수 있습니다.")
-
-    # DevTools Protocol 설정
-    screenshot_config = {
-      "fromSurface": True,
-      "clip": {
-        "x": bounding_box["x"],
-        "y": bounding_box["y"],
-        "width": bounding_box["width"],
-        "height": bounding_box["height"],
-        "scale": 1,
-      },
-    }
-    
-
-    base_64_png = driver.execute_cdp_cmd("Page.captureScreenshot", screenshot_config)
-
-    # base64 이미지를 디코딩하여 파일로 저장
-    with open(output_path, "wb") as file:
-      file.write(base64.b64decode(base_64_png["data"]))
-    print(f"요소 스크린샷 저장 완료: {output_path}")
-
-  except Exception as e:
-    print(f"요소 스크린샷 저장 중 오류 발생: {e}")
-
-  finally:
-    # iframe 해제
-    driver.switch_to.default_content()
 
 def initialize_driver(headless=False, debugging=False):
   """
@@ -311,45 +167,118 @@ def initialize_driver(headless=False, debugging=False):
   driver = webdriver.Chrome(options=chrome_options)
   driver.set_window_size(1341, 2100)
   time.sleep(2)
+  
+
+def capture_element_screenshot(int_page, output_filename="element_screenshot.png"):
+  """
+  DevTools Protocol을 사용해 iframe 내부의 특정 요소를 캡처
+  (요소가 실제로 보이도록 visibility_of_element_located 사용)
+  """
+  output_path = os.path.join(SCREENSHOT_FOLDER, output_filename)
+
+  try:
+    print("확인용1")
+    # iframe이 새로 로드됐을 가능성이 있으므로, 다시 찾아서 전환
+    iframe = WebDriverWait(driver, 10).until(
+      EC.presence_of_element_located((By.TAG_NAME, "iframe"))
+    )
+    driver.switch_to.frame(iframe)
+    print("확인용2")
+    
+    # 동적으로 page-0-0, page-1-0, page-2-0 ... 형태의 selector를 생성
+    page_selector = f'reader-page[id="page-{int_page}-0"]'
+    print(f"캡처할 selector: {page_selector}")
+    
+    # 요소가 보이도록 기다리기 (visibility_of_element_located)
+    element = WebDriverWait(driver, 10).until(
+      EC.visibility_of_element_located((By.CSS_SELECTOR, page_selector))
+    )
+    print("확인용3")
+
+    # 요소의 위치와 크기 가져오기
+    bounding_box = driver.execute_script(
+      """
+      const rect = document.querySelector(arguments[0]).getBoundingClientRect();
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height
+      };
+      """,
+      page_selector,
+    )
+
+    print("Bounding Box:", json.dumps(bounding_box, indent=4))
+
+    # 혹시라도 bounding_box가 여전히 0이면 추가 대기 or 재시도 로직을 둘 수도 있음
+    if bounding_box["width"] == 0 or bounding_box["height"] == 0:
+      print("⚠️ Bounding Box가 0입니다. 재시도 또는 대기 시간이 더 필요할 수 있습니다.")
+
+    # DevTools Protocol 설정
+    screenshot_config = {
+      "fromSurface": True,
+      "clip": {
+        "x": bounding_box["x"],
+        "y": bounding_box["y"],
+        "width": bounding_box["width"],
+        "height": bounding_box["height"],
+        "scale": 1,
+      },
+    }
+    
+    time.sleep(2)
+    base_64_png = driver.execute_cdp_cmd("Page.captureScreenshot", screenshot_config)
+
+    # base64 이미지를 디코딩하여 파일로 저장
+    with open(output_path, "wb") as file:
+      file.write(base64.b64decode(base_64_png["data"]))
+    print(f"요소 스크린샷 저장 완료: {output_path}")
+
+  except Exception as e:
+    print(f"요소 스크린샷 저장 중 오류 발생: {e}")
+
+  finally:
+    # iframe 해제
+    driver.switch_to.default_content()
 
 
 def main():
   try: 
     headless_mode = True
     debugging = True  # 디버깅 모드 활성화
-    screenshot_filename_counter = get_previous_screenshot_filename()
+    repeats_left = 30  # for문 최대 반복 횟수
+    past_url = None
+    current_page_id = "page-0-0"
     initialize_driver(headless=headless_mode, debugging=debugging)
+    current_url = driver.current_url
+    set_url_id = parse_qs(urlparse(set_url).query).get("id", [None])[0]
+    current_url_id = parse_qs(urlparse(current_url).query).get("id", [None])[0]
+    
+    # 초기 URL 설정, page id 설정
+    if current_url_id == set_url_id:
+      print("현재 페이지의 ID와 set_url의 ID가 동일합니다.")
+      print(f"현재 페이지 : {current_url}")
+      driver.get(current_url)
+      # reader-page의 id값 가져오기
+      current_page_id = get_reader_page_id()
+    else:
+      print("현재 페이지의 ID와 set_url의 ID가 동일하지 않습니다.")
+      print(f"설정한 페이지로 이동 : {set_url}")
+      driver.get(set_url)
 
-    # 초기 URL 설정
-    past_url = driver.current_url  # 첫 번째 실행 시 기준 URL 설정
-    ensure_page_loaded(driver=driver, set_url=set_url, loaded_url=past_url)
-    max_repeats = 5  # 최대 반복 횟수
-    repeat_count = 0  # 현재 반복 횟수
+    
+    # current_page_id에서 중앙의 숫자 값 추출
+    int_page = int(current_page_id.split('-')[1])
+    while debugging and int_page < int_page+repeats_left:
+      print(f"앞으로 {repeats_left}번 반복함.")
 
-    while debugging and repeat_count < max_repeats:
-      print(f"반복 실행 횟수: {repeat_count + 1}/{max_repeats}")
-
-      screenshot_filename = f"tmp_screenshot_{screenshot_filename_counter}.png"
-
-      # 동적으로 page-0-0, page-1-0, page-2-0 ... 형태의 selector를 생성
-      page_selector = f'reader-page[id="page-{repeat_count}-0"]'
-      print(f"캡처할 selector: {page_selector}")
-
-      # 캡처하기 전에 해당 요소가 페이지에 등장했는지 기다림
-      WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
-      )
+      screenshot_filename = f"tmp_screenshot_{int_page}.png"
 
       # 실제 캡처 수행
-      capture_element_screenshot(page_selector, screenshot_filename)
-      screenshot_filename_counter += 1
-
-      # 다음 동작 (우측 방향키 입력 등)
-      WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
-      )
-      ActionChains(driver).send_keys(Keys.ARROW_RIGHT).perform()
-      time.sleep(2)
+      capture_element_screenshot(int_page, screenshot_filename)
+      repeats_left -= 1
+      int_page += 1
 
       # 현재 URL과 past_url 비교
       current_url = driver.current_url
@@ -359,15 +288,23 @@ def main():
         break
 
       past_url = current_url
-      repeat_count += 1
 
+      # 다음 동작 (우측 방향키 입력 등)
+      WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+      )
+      ActionChains(driver).send_keys(Keys.ARROW_RIGHT).perform()
+      WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+      )
+      
     print("디버깅 반복 종료 또는 최대 반복 횟수 도달.")
 
   except Exception as e:
     print(f"예외 발생: {e}")
+    # close_chrome_and_port()
 
 # 프로그램 실행
 if __name__ == "__main__":
   ensure_screenshot_folder_exists()  # 폴더 존재 확인
   main()
-  # close_chrome_and_port()
