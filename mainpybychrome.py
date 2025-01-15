@@ -31,6 +31,7 @@ user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
                       50 을 넣으면 한번 실행할 때 마다 50페이지씩 찍어냄
   didyou_set_your_session = False 
                       *실행한 후 로그인 정보 넣고 나서 True로 바꾸세요
+                      *중요! 페이지 설정 표시 옵션 : 세로 스크롤 끄기, 너비에 맞춤, 한 페이지 레이아웃
   didyou_done = False
                       *다 끝났다면 숨겨져서 실행중인 Chromedriver 닫기
 """
