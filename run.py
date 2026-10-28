@@ -7,11 +7,13 @@ from pathlib import Path
 import subprocess
 import sys
 import venv
+from sss_pdf.console import configure_console
 
 ROOT = Path(__file__).resolve().parent
 
 
 def main(argv=None):
+    configure_console()
     parser = argparse.ArgumentParser(description='SSS PDF 환경 준비 및 웹 화면 실행')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--no-browser', action='store_true')

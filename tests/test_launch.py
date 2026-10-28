@@ -1,5 +1,6 @@
 """Repository launcher and default dashboard entry point regression checks."""
 import tempfile
+import io
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -9,6 +10,17 @@ from sss_pdf.cli import main
 
 
 class LaunchTests(unittest.TestCase):
+    def test_first_launch_with_windows_redirected_output(self):
+        output = io.BytesIO()
+        stream = io.TextIOWrapper(output, encoding='cp1252')
+        try:
+            with patch('sys.stdout', stream):
+                self.test_first_launch_installs_once_then_starts_web()
+                stream.flush()
+            self.assertIn('프로젝트 전용 Python 환경', output.getvalue().decode('utf-8'))
+        finally:
+            stream.close()
+
     def test_no_command_opens_dashboard(self):
         with patch('sss_pdf.web.main') as serve:
             self.assertEqual(main([]), 0)

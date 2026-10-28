@@ -3,9 +3,11 @@ import argparse
 from pathlib import Path
 import sys
 from .config import AppConfig
+from .console import configure_console
 
 
 def main(argv=None) -> int:
+    configure_console()
     parser = argparse.ArgumentParser(description='SSS PDF — 브라우저 캡처 및 PNG → PDF')
     commands = parser.add_subparsers(dest='command', required=True)
     for name in ('login', 'capture'):

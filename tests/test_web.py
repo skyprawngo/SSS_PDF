@@ -82,14 +82,16 @@ class DashboardTests(unittest.TestCase):
             image = session / 'page-1.png'
             image.write_bytes(b'fake image')
             def convert(source, target):
-                self.assertEqual(source, session)
+                self.assertEqual(source, session.resolve())
                 target.write_bytes(b'%PDF-test')
                 return target
             with patch('sss_pdf.browser.capture', return_value=[image]), patch('sss_pdf.pdf.create_pdf', side_effect=convert):
                 self.assertEqual(self.request('POST', '/api/capture', {'output_dir': folder})[0], 202)
                 self.assertEqual(self.wait_job()['state'], 'done')
                 self.assertEqual(self.request('POST', '/api/pdf', {'output_dir': folder})[0], 202)
-                self.assertTrue(self.wait_job()['download'])
+                result = self.wait_job()
+                self.assertEqual(result['state'], 'done', result['messages'])
+                self.assertTrue(result['download'])
                 status, data, _ = self.request('GET', '/api/download')
                 self.assertEqual(status, 200)
                 self.assertEqual(data, b'%PDF-test')
@@ -108,7 +110,7 @@ class DashboardTests(unittest.TestCase):
             with patch('sss_pdf.pdf.create_pdf', side_effect=ValueError('no direct images')) as convert:
                 self.request('POST', '/api/pdf', {'output_dir': folder})
                 self.assertEqual(self.wait_job()['state'], 'error')
-                self.assertEqual(convert.call_args.args[0], root)
+                self.assertEqual(convert.call_args.args[0], root.resolve())
 
 
 if __name__ == '__main__':
