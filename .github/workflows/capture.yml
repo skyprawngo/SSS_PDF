@@ -1,0 +1,118 @@
+name: Capture reader pages to PDF
+on:
+  workflow_dispatch:
+    inputs:
+      reader_url:
+        description: 'Owned or licensed reader URL'
+        required: true
+        type: string
+      pages:
+        description: 'Number of pages to capture'
+        required: true
+        default: '5'
+        type: string
+      timeout:
+        description: 'Page readiness timeout in seconds'
+        required: true
+        default: '30'
+        type: string
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e .
+      - name: Prepare isolated session
+        shell: python
+        env:
+          SSS_PDF_COOKIES: ${{ secrets.SSS_PDF_COOKIES }}
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          import tempfile
+          root = Path(tempfile.mkdtemp(prefix="sss-pdf-", dir=os.environ["RUNNER_TEMP"]))
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as target:
+              target.write(f"SSS_PDF_JOB_DIR={root}\n")
+          cookies = os.environ.get("SSS_PDF_COOKIES", "").strip()
+          if cookies:
+              try:
+                  parsed = json.loads(cookies)
+              except ValueError:
+                  raise SystemExit("SSS_PDF_COOKIES must contain a valid JSON cookie list.") from None
+              if not isinstance(parsed, list):
+                  raise SystemExit("SSS_PDF_COOKIES must contain a JSON list.")
+              path = root / "cookies.json"
+              path.write_text(json.dumps(parsed), encoding="utf-8")
+              path.chmod(0o600)
+      - name: Capture and generate PDF
+        shell: python
+        env:
+          SSS_PDF_READER_URL: ${{ inputs.reader_url }}
+          SSS_PDF_PAGES: ${{ inputs.pages }}
+          SSS_PDF_TIMEOUT: ${{ inputs.timeout }}
+        run: |
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import sys
+          root = Path(os.environ["SSS_PDF_JOB_DIR"])
+          chrome = shutil.which("google-chrome") or shutil.which("google-chrome-stable")
+          if not chrome:
+              raise SystemExit("Google Chrome is unavailable on this runner.")
+          command = [
+              sys.executable, "-m", "sss_pdf", "capture",
+              "--url", os.environ["SSS_PDF_READER_URL"],
+              "--pages", os.environ["SSS_PDF_PAGES"],
+              "--timeout", os.environ["SSS_PDF_TIMEOUT"],
+              "--output-dir", str(root / "screenshots"),
+              "--profile-dir", str(root / "profile"),
+              "--chrome-path", chrome, "--headless",
+          ]
+          cookies = root / "cookies.json"
+          if cookies.is_file():
+              command.extend(["--cookies-file", str(cookies)])
+          # Do not print the command or captured exception text: URLs/cookies can be private.
+          with (root / "capture.log").open("w", encoding="utf-8") as log:
+              result = subprocess.run(command, stdout=log, stderr=log, check=False)
+          if result.returncode:
+              raise SystemExit("Capture failed. Verify URL, reader layout, and authentication; private logs are not uploaded.")
+          runs = [path for path in (root / "screenshots").iterdir() if path.is_dir()]
+          if len(runs) != 1:
+              raise SystemExit("Expected exactly one capture output directory.")
+          output = root / "artifact"
+          output.mkdir()
+          with (root / "pdf.log").open("w", encoding="utf-8") as log:
+              result = subprocess.run([
+                  sys.executable, "-m", "sss_pdf", "pdf", str(runs[0]), str(output / "book.pdf")
+              ], stdout=log, stderr=log, check=False)
+          if result.returncode:
+              raise SystemExit("PDF conversion failed; private logs are not uploaded.")
+      - name: Upload generated PDF only
+        uses: actions/upload-artifact@v7
+        with:
+          name: captured-book-pdf
+          path: ${{ env.SSS_PDF_JOB_DIR }}/artifact/book.pdf
+          if-no-files-found: error
+          retention-days: 3
+      - name: Remove browser session and temporary files
+        if: always()
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import shutil
+          value = os.environ.get("SSS_PDF_JOB_DIR")
+          if value:
+              root = Path(value)
+              temp = Path(os.environ["RUNNER_TEMP"]).resolve()
+              if root.resolve().parent == temp and root.name.startswith("sss-pdf-"):
+                  shutil.rmtree(root, ignore_errors=True)

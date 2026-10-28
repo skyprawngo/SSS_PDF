@@ -1,0 +1,4 @@
+include readme.md
+include run.py start.command start.bat
+recursive-include sss_pdf/static *.html *.css *.js
+recursive-include tests *.py *.html
