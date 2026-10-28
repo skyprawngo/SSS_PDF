@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=84.2.1,<85"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sss-pdf"
+version = "0.2.0"
+description = "Cross-platform browser page capture and local PDF workspace"
+readme = "readme.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+  "selenium>=4.51.0,<5",
+  "img2pdf>=0.6.3,<0.7",
+]
+
+[project.optional-dependencies]
+dev = ["build>=1.6.1,<2"]
+
+[project.scripts]
+sss-pdf = "sss_pdf.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sss_pdf*"]
+
+[tool.setuptools.package-data]
+sss_pdf = ["static/*"]
